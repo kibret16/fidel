@@ -1,36 +1,140 @@
 <!DOCTYPE html>
 <html lang="en-US">
-
 <head>
-
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Fidel</title>
 <link rel='manifest' href='manifest.json'>
-<link rel="stylesheet" href="style.css">
 
-<link rel="apple-touch-icon" sizes="180x180" href="images/icon.png">
-<link rel="icon" type="image/png" sizes="any" href="images/icon.png">
-
+<title>Fidel</title>
+<style>
+  :root { --bg: #000000; --card: #1c1c1e; --text: #f5f5f7; --accent: #0a84ff; --danger: #ff453a; --input: #2c2c2e; --border: #3a3a3c; }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { background-color: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 0.5em; background-color: var(--card); border-bottom: 1px solid var(--border); height: 3.5em; flex-shrink: 0; }
+  h1 { font-size: 1.2em; font-weight: 600; letter-spacing: -0.02em; }
+  button { background: var(--accent); color: white; border: none; padding: 0.4em 1em; border-radius: 1em; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
+  button:active { opacity: 0.7; }
+  button.secondary { background: var(--input); color: var(--accent); }
+  #controls { display: flex; gap: 0.5em; padding: 0.5em; background-color: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; }
+  input { background-color: var(--input); color: var(--text); border: none; padding: 0.5em; border-radius: 0.5em; flex: 1; min-width: 0; outline: none; }
+  input::placeholder { color: #888; }
+  #editor-container { flex-grow: 1; position: relative; display: flex; flex-direction: column; background-color: var(--bg); }
+  textarea { flex-grow: 1; width: 100%; background-color: var(--bg); color: var(--text); border: none; padding: 1em; resize: none; outline: none; appearance: none; border-radius: 0; font-family: 'abyssinica', 'visual geez unicode', -apple-system, sans-serif; }
+  /* Scrollbar hiding for clean look */
+  ::-webkit-scrollbar { width: 0px; background: transparent; }
+</style>
 </head>
-
 <body>
 
-<div class="container-box">
-  <span class="btn float-right" onclick="copyText('writing-area-one')">Copy</span>
-  <h1 class="mb-1">Fidel</h1>
+<header>
+  <h1>Fidel</h1>
+  <button onclick="copyText()">Copy</button>
+</header>
 
-  <div class="row" id="text">
-    <textarea id="writing-area-one" class="relaxed full-width input-field bordered writing-area "  onclick='javascript:hide_help_table("fidel_table")' onkeyup='javascript:if(event.crtlKey) var ctrl=1; amh("writing-area-one",event, ctrl)'></textarea>
-  </div>
-
+<div id="controls">
+  <input type="text" id="find-text" placeholder="Find">
+  <input type="text" id="replace-text" placeholder="Replace">
+  <button class="secondary" onclick="replaceText()">Replace</button>
 </div>
 
+<div id="editor-container">
+  <textarea id="writing-area" placeholder="Type to transliterate..." spellcheck="false"></textarea>
+</div>
 
-<script src="script.js"></script>
-<script src="amh.js"></script>
+<script>
+  const replacements = {
+    "b": "ብ", "B": "ብ", "ብe": "በ", "ብu": "ቡ", "ብi": "ቢ", "ብa": "ባ", "ቡa": "ቧ", "ቢe": "ቤ", "ብE": "ቤ", "ብo": "ቦ",
+    "c": "ች", "ችe": "ቸ", "ችu": "ቹ", "ችi": "ቺ", "ችa": "ቻ", "ቹa": "ቿ", "ቺe": "ቼ", "ችE": "ቼ", "ችo": "ቾ",
+    "d": "ድ", "D": "ድ", "ድe": "ደ", "ድu": "ዱ", "ድi": "ዲ", "ድa": "ዳ", "ዱa": "ዷ", "ዲe": "ዴ", "ድE": "ዴ", "ድo": "ዶ",
+    "f": "ፍ", "F": "ፍ", "ፍe": "ፈ", "ፍu": "ፉ", "ፍi": "ፊ", "ፍa": "ፋ", "ፉa": "ፏ", "ፊe": "ፌ", "ፍE": "ፌ", "ፍo": "ፎ",
+    "g": "ግ", "G": "ግ", "ግe": "ገ", "ግu": "ጉ", "ግi": "ጊ", "ግa": "ጋ", "ጉa": "ጓ", "ጊe": "ጌ", "ግE": "ጌ", "ግo": "ጎ",
+    "h": "ህ", "H": "ህ", "ህe": "ኸ", "ህu": "ሁ", "ህi": "ሂ", "ህa": "ሃ", "ሁa": "ኋ", "ሂe": "ሄ", "ህE": "ሄ", "ህo": "ሆ",
+    "j": "ጅ", "J": "ጅ", "ጅe": "ጀ", "ጅu": "ጁ", "ጅi": "ጂ", "ጅa": "ጃ", "ጁa": "ጇ", "ጂe": "ጄ", "ጅE": "ጄ", "ጅo": "ጆ",
+    "k": "ክ", "K": "ክ", "ክe": "ከ", "ክu": "ኩ", "ክi": "ኪ", "ክa": "ካ", "ኩa": "ኳ", "ኪe": "ኬ", "ክE": "ኬ", "ክo": "ኮ",
+    "l": "ል", "L": "ል", "ልe": "ለ", "ልu": "ሉ", "ልi": "ሊ", "ልa": "ላ", "ሉa": "ሏ", "ሊe": "ሌ", "ሊE": "ሌ", "ልo": "ሎ",
+    "m": "ም", "M": "ም", "ምe": "መ", "ምu": "ሙ", "ምi": "ሚ", "ምa": "ማ", "ሙa": "ሟ", "ሚe": "ሜ", "ምE": "ሜ", "ምo": "ሞ",
+    "n": "ን", "ንe": "ነ", "ንu": "ኑ", "ንi": "ኒ", "ንa": "ና", "ኑa": "ኗ", "ኒe": "ኔ", "ንE": "ኔ", "ንo": "ኖ",
+    "p": "ፕ", "ፕe": "ፐ", "ፕu": "ፑ", "ፕi": "ፒ", "ፕa": "ፓ", "ፑa": "ፗ", "ፒe": "ፔ", "ፕE": "ፔ", "ፕo": "ፖ",
+    "q": "ቅ", "Q": "ቅ", "ቅe": "ቀ", "ቅu": "ቁ", "ቅi": "ቂ", "ቅa": "ቃ", "ቁa": "ቋ", "ቂe": "ቄ", "ቅE": "ቄ", "ቅo": "ቆ",
+    "r": "ር", "R": "ር", "ርe": "ረ", "ርu": "ሩ", "ርi": "ሪ", "ርa": "ራ", "ሩa": "ሯ", "ሪe": "ሬ", "ርE": "ሬ", "ርo": "ሮ",
+    "s": "ስ", "ስe": "ሰ", "ስu": "ሱ", "ስi": "ሲ", "ስa": "ሳ", "ሱa": "ሷ", "ሲe": "ሴ", "ስE": "ሴ", "ስo": "ሶ",
+    "t": "ት", "ትe": "ተ", "ትu": "ቱ", "ትi": "ቲ", "ትa": "ታ", "ቱa": "ቷ", "ቲe": "ቴ", "ትE": "ቴ", "ትo": "ቶ",
+    "v": "ቭ", "V": "ቭ", "ቭe": "ቨ", "ቭu": "ቩ", "ቭi": "ቪ", "ቭa": "ቫ", "ቩa": "ቯ", "ቪe": "ቬ", "ቭE": "ቬ", "ቭo": "ቮ",
+    "w": "ው", "W": "ው", "ውe": "ወ", "ውu": "ዉ", "ውi": "ዊ", "ውa": "ዋ", "ዊe": "ዌ", "ውE": "ዌ", "ውo": "ዎ",
+    "x": "ሽ", "X": "ሽ", "ሽe": "ሸ", "ሽu": "ሹ", "ሽi": "ሺ", "ሽa": "ሻ", "ሹa": "ሿ", "ሺe": "ሼ", "ሽE": "ሼ", "ሽo": "ሾ",
+    "y": "ይ", "Y": "ይ", "ይe": "የ", "ይu": "ዩ", "ይi": "ዪ", "ይa": "ያ", "ዪe": "ዬ", "ይE": "ዬ", "ይo": "ዮ",
+    "z": "ዝ", "ዝe": "ዘ", "ዝu": "ዙ", "ዝi": "ዚ", "ዝa": "ዛ", "ዙa": "ዟ", "ዚe": "ዜ", "ዝE": "ዜ", "ዝo": "ዞ",
+    "C": "ጭ", "ጭe": "ጨ", "ጭu": "ጩ", "ጭi": "ጪ", "ጭa": "ጫ", "ጩa": "ጯ", "ጪe": "ጬ", "ጭE": "ጬ", "ጭo": "ጮ",
+    "N": "ኝ", "ኝe": "ኘ", "ኝu": "ኙ", "ኝi": "ኚ", "ኝa": "ኛ", "ኙa": "ኟ", "ኚe": "ኜ", "ኝE": "ኜ", "ኝo": "ኞ",
+    "P": "ጵ", "ጵe": "ጰ", "ጵu": "ጱ", "ጵi": "ጲ", "ጵa": "ጳ", "ጱa": "ጷ", "ጲe": "ጴ", "ጵE": "ጴ", "ጵo": "ጶ",
+    "S": "ፅ", "ፅe": "ፀ", "ፅu": "ፁ", "ፅi": "ፂ", "ፅa": "ፃ", "ፁa": "ጿ", "ፂe": "ፄ", "ፅE": "ፄ", "ፅo": "ፆ",
+    "T": "ጥ", "ጥe": "ጠ", "ጥu": "ጡ", "ጥi": "ጢ", "ጥa": "ጣ", "ጡa": "ጧ", "ጢe": "ጤ", "ጥE": "ጤ", "ጥo": "ጦ",
+    "Z": "ዥ", "ዥe": "ዠ", "ዥu": "ዡ", "ዥi": "ዢ", "ዥa": "ዣ", "ዡa": "ዧ", "ዢe": "ዤ", "ዥE": "ዤ", "ዥo": "ዦ",
+    "እe": "ኧ", "ኢe": "ኤ", "a": "አ", "A": "አ", "u": "ኡ", "U": "ኡ", "i": "ኢ", "I": "ኢ", "E": "ኤ", "o": "ኦ", "O": "ኦ", "e": "እ",
+    "'": "'", "''": "\"", "'እ": "እ", "'ኡ": "ኡ", "'ኢ": "ኢ", "'አ": "አ", "'ኢe": "ኤ", "'ኤ": "ኤ", "'ኦ": "ኦ", "'እe": "ኧ",
+    "እግዚአብሄር": "እግዚአብሔር", "እግዚ/ር": "እግዚአብሔር ", "እየሱስ": "ኢየሱስ", "እረ ": "ኧረ ", "እየሩሳሌም": "ኢየሩሳሌም", "እያሱ": "ኢያሱ", "አእምሮ": "አይምሮ", "ራሔል": "ራሄል", "ቤተልሔም": "ቤተልሄም",
+    "ሐ": "ሃ", "ሑ": "ሁ", "ሒ": "ሂ", "ሕ": "ህ", "ሖ": "ሆ", "ኀ": "ሃ", "ኃ": "ሃ", "ኅ": "ህ", "ሠ": "ሰ", "ሡ": "ሱ", "ሢ": "ሲ", "ሣ": "ሳ", "ሤ": "ሴ", "ሥ": "ስ", "ሦ": "ሶ", "ኣ": "አ", "ቍ": "ቁ", "ቈ": "ቆ", "ኵ": "ኩ", "ኻ": "ሃ", "ኾ": "ሆ", "ጕ": "ጉ", "ኆ": "ሆ", "ኰ": "ኮ", "ኹ": "ሁ", "ኼ": "ሄ", "ኽ": "ህ", "ጐ": "ጎ", "ጸ": "ፀ", "ጹ": "ፁ", "ጺ": "ፂ", "ጻ": "ፃ", "ጼ": "ፄ", "ጽ": "ፅ", "ጾ": "ፆ", "ዐ": "አ", "ዑ": "ኡ", "ዒ": "ኢ", "ዓ": "አ", "ዔ": "ኤ", "ዕ": "እ", "ዖ": "ኦ", ";": "፤", "',": "፥", "፥,": "፣", ":": "፡", "።": "።"
+  };
 
+  const toAmharic = (text) => {
+    let tv = text;
+    for (const [key, value] of Object.entries(replacements)) {
+      // Using a simpler replace strategy for performance on mobile
+      tv = tv.split(key).join(value); 
+    }
+    return tv;
+  };
+
+  const handleInput = (e) => {
+    // Only process if it's not a control key like backspace
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    
+    const el = e.target;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const original = el.value;
+    
+    // We only want to transliterate the last few characters to avoid lag on long text
+    // But for correct multi-char mapping (like 'b' + 'e' -> 'በ'), we need context
+    // This simple approach rewrites the value.
+    const newVal = toAmharic(original);
+    
+    if (newVal !== original) {
+      // Calculate cursor offset based on length difference
+      const diff = newVal.length - original.length;
+      el.value = newVal;
+      el.setSelectionRange(start + diff, end + diff);
+    }
+  };
+
+  const copyText = () => {
+    const txt = document.getElementById("writing-area");
+    txt.select();
+    txt.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    // Visual feedback
+    const btn = document.querySelector('header button');
+    const original = btn.innerText;
+    btn.innerText = "Copied!";
+    setTimeout(() => btn.innerText = original, 1500);
+  };
+
+  const replaceText = () => {
+    const find = document.getElementById("find-text").value;
+    const replace = document.getElementById("replace-text").value;
+    const area = document.getElementById("writing-area");
+    if (!find) return;
+    area.value = area.value.split(find).join(replace);
+  };
+
+  // Event Listeners
+  document.getElementById("writing-area").addEventListener('keyup', handleInput);
+  
+  // Register Service Worker if applicable
+  if ("serviceWorker" in navigator && !navigator.serviceWorker.controller) {
+    navigator.serviceWorker.register("pwabuilder-sw.js", { scope: "./" });
+  }
+</script>
 </body>
-
 </html>
